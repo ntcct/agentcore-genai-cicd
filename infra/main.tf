@@ -37,12 +37,17 @@ resource "aws_s3_bucket_lifecycle_configuration" "artifacts" {
   }
 }
 
-# Uploading a new zip creates a new S3 version -> runtime update below.
+# Seed zip: Terraform uploads it ONCE so the runtime can be created.
+# After that the app pipeline (deploy-app.yml) owns this object's content.
 resource "aws_s3_object" "agent_zip" {
   bucket      = aws_s3_bucket.artifacts.id
   key         = "agent/agent.zip"
   source      = var.artifact_path
   source_hash = filemd5(var.artifact_path)
+
+  lifecycle {
+    ignore_changes = all
+  }
 
   depends_on = [aws_s3_bucket_versioning.artifacts]
 }
@@ -176,6 +181,12 @@ resource "aws_bedrockagentcore_agent_runtime" "agent" {
   }
 
   depends_on = [time_sleep.iam_propagation]
+
+  lifecycle {
+    # Code deployments are done by the app pipeline (scripts/deploy_code.py).
+    # Terraform owns every other setting of the runtime.
+    ignore_changes = [agent_runtime_artifact]
+  }
 }
 
 # AgentCore creates the runtime log group itself (with "never expire").

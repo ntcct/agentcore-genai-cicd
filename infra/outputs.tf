@@ -17,3 +17,7 @@ output "artifact_bucket" {
 output "log_group" {
   value = local.log_group_name
 }
+
+output "app_deploy_role_arn" {
+  value = aws_iam_role.app_deploy.arn
+}
