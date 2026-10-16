@@ -31,7 +31,9 @@ jobs:
   plan:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    concurrency: { group: terraform-plan-${{ github.ref }}, cancel-in-progress: true }
+    concurrency:
+      group: terraform-plan-${{ github.ref }}
+      cancel-in-progress: true
     defaults: { run: { working-directory: infra } }
     steps:
       - uses: actions/checkout@v7
@@ -76,7 +78,9 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: production          # required reviewer = manual approval gate
-    concurrency: { group: agentcore-runtime, cancel-in-progress: false }  # shared with app deploys
+    concurrency:
+      group: agentcore-runtime   # shared with app deploys
+      cancel-in-progress: false
     defaults: { run: { working-directory: infra } }
     steps:
       - uses: actions/checkout@v7

@@ -37,6 +37,8 @@ jobs:
       - name: Package agent (ARM64 zip)
         run: python scripts/package.py
       - name: Run packaged agent and test HTTP contract
+        env:
+          AWS_DEFAULT_REGION: us-east-1   # botocore needs a region to build the client; no AWS calls are made
         run: |
           mkdir -p /tmp/agent && cd /tmp/agent && unzip -q "$GITHUB_WORKSPACE/dist/agent.zip"
           python main.py & PID=$!
@@ -52,7 +54,9 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: app                 # trust policy of the app-deploy role is bound to this env
-    concurrency: { group: agentcore-runtime, cancel-in-progress: false }  # shared with infra apply
+    concurrency:
+      group: agentcore-runtime   # shared with infra apply
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
