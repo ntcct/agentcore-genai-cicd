@@ -1,0 +1,16 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+*.tfvars
+!example.tfvars
+
+# Build artifacts
+build/
+dist/
+__pycache__/
+*.pyc
+response.json
