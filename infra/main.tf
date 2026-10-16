@@ -178,8 +178,16 @@ resource "aws_bedrockagentcore_agent_runtime" "agent" {
   depends_on = [time_sleep.iam_propagation]
 }
 
-# Pre-create the runtime log group to enforce retention (default is never expire).
-resource "aws_cloudwatch_log_group" "runtime" {
-  name              = "/aws/bedrock-agentcore/runtimes/${aws_bedrockagentcore_agent_runtime.agent.agent_runtime_id}-DEFAULT"
-  retention_in_days = var.log_retention_days
+# AgentCore creates the runtime log group itself (with "never expire").
+# Set retention after creation instead of managing the group directly.
+locals {
+  log_group_name = "/aws/bedrock-agentcore/runtimes/${aws_bedrockagentcore_agent_runtime.agent.agent_runtime_id}-DEFAULT"
+}
+
+resource "terraform_data" "log_retention" {
+  triggers_replace = [local.log_group_name, var.log_retention_days]
+
+  provisioner "local-exec" {
+    command = "aws logs put-retention-policy --region ${var.region} --log-group-name ${local.log_group_name} --retention-in-days ${var.log_retention_days}"
+  }
 }

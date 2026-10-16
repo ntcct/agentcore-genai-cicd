@@ -15,5 +15,5 @@ output "artifact_bucket" {
 }
 
 output "log_group" {
-  value = aws_cloudwatch_log_group.runtime.name
+  value = local.log_group_name
 }
