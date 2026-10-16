@@ -24,3 +24,10 @@ variable "log_retention_days" {
   type    = number
   default = 7
 }
+
+# GitHub immutable OIDC subject prefix: repo:<owner>@<owner_id>/<repo>@<repo_id>
+# gh api repos/<owner>/<repo>/actions/oidc/customization/sub --jq .sub_claim_prefix
+variable "github_sub_prefix" {
+  type    = string
+  default = "repo:ntcct@54580275/agentcore-genai-cicd@1421537516"
+}

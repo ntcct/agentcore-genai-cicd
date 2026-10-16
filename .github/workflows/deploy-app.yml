@@ -1,0 +1,76 @@
+name: deploy-app
+
+# Code pipeline: runs only when agent code or packaging changes. No Terraform.
+on:
+  pull_request:
+    branches: [main]
+    paths: ["app/**", "scripts/**", ".github/workflows/deploy-app.yml"]
+  push:
+    branches: [main]
+    paths: ["app/**", "scripts/**", ".github/workflows/deploy-app.yml"]
+  workflow_dispatch:
+    inputs:
+      s3_version_id:
+        description: "Rollback: S3 version ID of a previous agent.zip (leave empty to build & deploy HEAD)"
+        type: string
+        default: ""
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  BOTO3_VERSION: "1.43.114"
+
+jobs:
+  # PRs: build the real artifact and test it locally on the runner (no AWS access)
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: { python-version: "3.13" }
+      - name: Lint
+        run: python -m py_compile app/main.py scripts/package.py scripts/deploy_code.py
+      - name: Package agent (ARM64 zip)
+        run: python scripts/package.py
+      - name: Run packaged agent and test HTTP contract
+        run: |
+          mkdir -p /tmp/agent && cd /tmp/agent && unzip -q "$GITHUB_WORKSPACE/dist/agent.zip"
+          python main.py & PID=$!
+          sleep 3
+          curl -fsS http://localhost:8080/ping | grep -q Healthy
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8080/invocations -H 'Content-Type: application/json' -d '{}')
+          test "$CODE" = "400"
+          kill $PID
+          echo "contract OK: /ping healthy, empty prompt rejected"
+
+  # main / manual: upload zip, update runtime code only, smoke test
+  deploy:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: app                 # trust policy of the app-deploy role is bound to this env
+    concurrency: { group: agentcore-runtime, cancel-in-progress: false }  # shared with infra apply
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: { python-version: "3.13" }
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.APP_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Install deploy dependencies
+        run: python -m pip install --quiet "boto3==${BOTO3_VERSION}"
+      - name: Package agent (ARM64 zip)
+        if: inputs.s3_version_id == ''
+        run: python scripts/package.py
+      - name: Deploy code to AgentCore Runtime
+        id: deploy
+        run: |
+          ARGS="--runtime-id ${{ vars.RUNTIME_ID }} --bucket ${{ vars.ARTIFACT_BUCKET }}"
+          if [ -n "${{ inputs.s3_version_id }}" ]; then ARGS="$ARGS --s3-version-id ${{ inputs.s3_version_id }}"; fi
+          python scripts/deploy_code.py $ARGS
+      - name: Summary
+        run: echo "Deployed runtime version **${{ steps.deploy.outputs.runtime_version }}**" >> "$GITHUB_STEP_SUMMARY"
