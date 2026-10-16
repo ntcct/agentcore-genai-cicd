@@ -29,10 +29,12 @@ variable "project" {
   default = "agentcore-genai-cicd"
 }
 
-variable "github_repo" {
-  description = "GitHub repository in owner/name form"
-  type        = string
-  default     = "ntcct/agentcore-genai-cicd"
+# GitHub's immutable OIDC subject: repo:<owner>@<owner_id>/<repo>@<repo_id>
+# Survives repo renames and blocks "deleted + recreated repo" takeover.
+# Find it: gh api repos/<owner>/<repo>/actions/oidc/customization/sub --jq .sub_claim_prefix
+variable "github_sub_prefix" {
+  type    = string
+  default = "repo:ntcct@54580275/agentcore-genai-cicd@1421537516"
 }
 
 data "aws_caller_identity" "current" {}
@@ -100,8 +102,8 @@ data "aws_iam_policy_document" "github_trust" {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:${var.github_repo}:pull_request",
-        "repo:${var.github_repo}:environment:production",
+        "${var.github_sub_prefix}:pull_request",
+        "${var.github_sub_prefix}:environment:production",
       ]
     }
   }
